@@ -1,0 +1,11 @@
+.openai/
+dist/
+preview.mjs
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+

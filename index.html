@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#123b45" />
+  <meta name="description" content="Prototipo local de agenda diaria de citas" />
+  <title>Mi agenda · Citas del día</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23123b45'/%3E%3Crect x='13' y='18' width='38' height='34' rx='7' fill='%23ffffff'/%3E%3Cpath d='M13 27h38' stroke='%232e8192' stroke-width='5'/%3E%3Cpath d='M23 12v12M41 12v12' stroke='%23ffffff' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='39' r='6' fill='%23e29163'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #16333a;
+      --muted: #60787e;
+      --brand: #123b45;
+      --brand-2: #2e8192;
+      --accent: #e29163;
+      --canvas: #eef5f6;
+      --surface: #ffffff;
+      --line: #d7e4e6;
+      --danger: #ad3f43;
+      --shadow: 0 18px 48px rgba(25, 65, 75, .12);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 90% 4%, rgba(46, 129, 146, .15), transparent 31rem),
+        var(--canvas);
+    }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 3px solid rgba(46, 129, 146, .28);
+      outline-offset: 2px;
+    }
+
+    .app {
+      width: min(100% - 28px, 1050px);
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 30px;
+    }
+    .view-switcher {
+      display: inline-flex;
+      gap: 4px;
+      margin: 0 0 16px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: rgba(255, 255, 255, .75);
+    }
+    .view-button {
+      min-width: 88px;
+      min-height: 38px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 9px;
+      color: var(--muted);
+      background: transparent;
+      font-weight: 750;
+    }
+    .view-button[aria-selected="true"] { color: #fff; background: var(--brand); box-shadow: 0 5px 12px rgba(18, 59, 69, .16); }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      color: #fff;
+      background: var(--brand);
+      box-shadow: 0 9px 22px rgba(18, 59, 69, .2);
+    }
+    .brand-mark svg { width: 22px; }
+    .brand-copy strong { display: block; font-size: 1.05rem; }
+    .brand-copy span { display: block; margin-top: 2px; color: var(--muted); font-size: .78rem; }
+    .primary {
+      min-height: 46px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 13px;
+      color: #fff;
+      background: var(--brand);
+      font-weight: 750;
+      box-shadow: 0 9px 20px rgba(18, 59, 69, .2);
+      transition: transform .15s ease, background .15s ease;
+    }
+    .primary:hover { background: #1a4d58; transform: translateY(-1px); }
+
+    .day-shell {
+      display: grid;
+      grid-template-columns: 290px minmax(0, 1fr);
+      min-height: 590px;
+      overflow: hidden;
+      border: 1px solid rgba(215, 228, 230, .9);
+      border-radius: 26px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .day-header {
+      position: relative;
+      padding: 34px;
+      color: #fff;
+      background: var(--brand);
+      overflow: hidden;
+    }
+    .day-header::after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      bottom: -90px;
+      width: 250px;
+      height: 250px;
+      border: 46px solid rgba(255, 255, 255, .055);
+      border-radius: 50%;
+    }
+    .eyebrow {
+      position: relative;
+      z-index: 1;
+      margin: 0 0 13px;
+      color: #acd0d7;
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .day-title {
+      position: relative;
+      z-index: 1;
+      margin: 0;
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      line-height: .95;
+      letter-spacing: -.055em;
+    }
+    .day-title span { display: block; color: #b9dbe1; font-size: .48em; letter-spacing: -.02em; margin-top: 12px; }
+    .day-summary {
+      position: relative;
+      z-index: 1;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, .15);
+      color: #d5e8eb;
+      font-size: .95rem;
+      line-height: 1.55;
+    }
+    .day-summary strong { color: #fff; }
+
+    .agenda { padding: 34px 38px 38px; }
+    .agenda-nav { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 28px; }
+    .nav-group { display: flex; gap: 8px; }
+    .icon-button, .today-button {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--ink);
+      background: #fff;
+      font-weight: 700;
+    }
+    .icon-button { display: grid; place-items: center; width: 44px; padding: 0; }
+    .icon-button svg { width: 19px; }
+    .today-button { padding: 0 16px; }
+    .icon-button:hover, .today-button:hover { border-color: #9bbec5; background: #f6fafb; }
+    .today-button:disabled { opacity: .45; cursor: default; }
+    .count { color: var(--muted); font-size: .9rem; font-weight: 650; }
+
+    .appointments { list-style: none; margin: 0; padding: 0; }
+    .appointment {
+      display: grid;
+      grid-template-columns: 70px 16px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      min-height: 98px;
+    }
+    .time { padding-top: 16px; font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .rail { position: relative; align-self: stretch; }
+    .rail::before { content: ""; position: absolute; top: 25px; bottom: -17px; left: 7px; width: 2px; background: var(--line); }
+    .appointment:last-child .rail::before { display: none; }
+    .dot { position: absolute; top: 20px; left: 2px; width: 12px; height: 12px; border: 3px solid #fff; border-radius: 50%; background: var(--brand-2); box-shadow: 0 0 0 2px var(--brand-2); }
+    .appointment-card {
+      margin-bottom: 14px;
+      padding: 15px 18px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: #fbfdfd;
+      transition: transform .15s ease, border-color .15s ease;
+    }
+    .appointment-card:hover { transform: translateX(2px); border-color: #a9cbd1; }
+    .appointment-card h2 { margin: 0; font-size: 1.04rem; }
+    .appointment-card p { margin: 5px 0 0; color: var(--muted); font-size: .9rem; line-height: 1.4; }
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 360px;
+      padding: 28px;
+      border: 1px dashed #bfd2d6;
+      border-radius: 18px;
+      text-align: center;
+      background: #f8fbfb;
+    }
+    .empty-icon { display: grid; place-items: center; width: 60px; height: 60px; margin: 0 auto 15px; border-radius: 18px; color: var(--brand-2); background: #e4f1f3; }
+    .empty-icon svg { width: 28px; }
+    .empty h2 { margin: 0; font-size: 1.18rem; }
+    .empty p { margin: 8px 0 0; color: var(--muted); }
+
+    [hidden] { display: none !important; }
+    .week-shell { overflow: hidden; border: 1px solid rgba(215, 228, 230, .9); border-radius: 26px; background: var(--surface); box-shadow: var(--shadow); }
+    .week-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 30px 22px; }
+    .week-heading { margin: 0; font-size: clamp(1.35rem, 3vw, 1.8rem); letter-spacing: -.025em; }
+    .week-subtitle { margin: 5px 0 0; color: var(--muted); font-size: .9rem; }
+    .week-nav { display: flex; align-items: center; gap: 8px; }
+    .week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+    .week-day { min-width: 0; padding: 18px 12px 20px; border-right: 1px solid var(--line); background: #fff; }
+    .week-day:last-child { border-right: 0; }
+    .week-day.is-today { background: #eff8f9; box-shadow: inset 0 4px 0 var(--brand-2); }
+    .week-day-button { display: block; width: 100%; padding: 0 4px 15px; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); text-align: left; background: transparent; }
+    .week-day-button:hover .week-date { color: var(--brand-2); }
+    .week-weekday { display: block; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .week-date { display: block; margin-top: 5px; font-size: 1.35rem; font-weight: 850; line-height: 1; transition: color .15s ease; }
+    .week-day.is-today .week-weekday, .week-day.is-today .week-date { color: var(--brand-2); }
+    .week-items { display: grid; gap: 8px; margin-top: 13px; }
+    .week-appointment { min-width: 0; padding: 10px; border-left: 3px solid var(--brand-2); border-radius: 8px; background: #f6fafb; }
+    .week-appointment time { display: block; margin-bottom: 4px; font-size: .78rem; font-weight: 850; font-variant-numeric: tabular-nums; }
+    .week-appointment strong { display: block; overflow: hidden; font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+    .week-appointment p { display: -webkit-box; overflow: hidden; margin: 3px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .week-empty { margin: 15px 0 0; color: #8aa0a5; font-size: .78rem; }
+
+    .month-shell { overflow: hidden; border: 1px solid rgba(215, 228, 230, .9); border-radius: 26px; background: var(--surface); box-shadow: var(--shadow); }
+    .month-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 30px 22px; }
+    .month-heading { margin: 0; font-size: clamp(1.35rem, 3vw, 1.8rem); letter-spacing: -.025em; }
+    .month-subtitle { margin: 5px 0 0; color: var(--muted); font-size: .9rem; }
+    .month-nav { display: flex; align-items: center; gap: 8px; }
+    .month-weekdays, .month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .month-weekdays { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #f6fafb; }
+    .month-weekdays span { padding: 10px 8px; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+    .month-day {
+      position: relative;
+      min-width: 0;
+      min-height: 122px;
+      padding: 10px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      text-align: left;
+      background: #fff;
+    }
+    .month-day:nth-child(7n) { border-right: 0; }
+    .month-day:nth-last-child(-n + 7) { border-bottom: 0; }
+    .month-day:hover { z-index: 1; background: #f7fbfb; box-shadow: inset 0 0 0 2px #a9cbd1; }
+    .month-day.is-outside { color: #91a3a7; background: #fafcfc; }
+    .month-day.is-today { background: #eff8f9; box-shadow: inset 0 0 0 3px var(--brand-2); }
+    .month-number { display: grid; place-items: center; width: 28px; height: 28px; margin-bottom: 8px; border-radius: 50%; font-size: .88rem; font-weight: 850; }
+    .month-day.is-today .month-number { color: #fff; background: var(--brand-2); }
+    .month-appointments { display: grid; gap: 4px; }
+    .month-appointment { display: block; overflow: hidden; padding: 4px 6px; border-left: 3px solid var(--brand-2); border-radius: 5px; background: #edf6f7; font-size: .7rem; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .month-appointment time { margin-right: 4px; font-weight: 850; font-variant-numeric: tabular-nums; }
+    .month-more { color: var(--brand-2); font-size: .7rem; font-weight: 800; }
+    .month-mobile-count { display: none; }
+
+    dialog {
+      width: min(92vw, 520px);
+      padding: 0;
+      border: 0;
+      border-radius: 22px;
+      color: var(--ink);
+      background: #fff;
+      box-shadow: 0 28px 80px rgba(10, 35, 42, .28);
+    }
+    dialog::backdrop { background: rgba(9, 31, 36, .56); backdrop-filter: blur(4px); }
+    .modal-head { display: flex; justify-content: space-between; gap: 20px; padding: 25px 26px 18px; border-bottom: 1px solid var(--line); }
+    .modal-head h2 { margin: 0; font-size: 1.35rem; }
+    .modal-head p { margin: 5px 0 0; color: var(--muted); font-size: .88rem; }
+    .close-button { flex: 0 0 auto; width: 40px; height: 40px; border: 0; border-radius: 11px; color: var(--muted); background: #edf3f4; font-size: 1.4rem; }
+    form { padding: 22px 26px 26px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
+    .field { display: grid; gap: 7px; }
+    .field.full { grid-column: 1 / -1; }
+    label { font-size: .87rem; font-weight: 750; }
+    input, textarea { width: 100%; border: 1px solid #c8dadd; border-radius: 11px; color: var(--ink); background: #fff; }
+    input { height: 45px; padding: 0 12px; }
+    textarea { min-height: 84px; padding: 11px 12px; resize: vertical; }
+    input:hover, textarea:hover { border-color: #95bcc4; }
+    .error { min-height: 20px; margin: 14px 0 0; color: var(--danger); font-size: .86rem; font-weight: 650; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+    .secondary { min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #fff; font-weight: 700; }
+    .toast { position: fixed; right: 22px; bottom: 22px; z-index: 5; padding: 13px 17px; border-radius: 12px; color: #fff; background: var(--brand); box-shadow: var(--shadow); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .22s ease; }
+    .toast.visible { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 760px) {
+      .app { width: min(100% - 20px, 560px); padding-top: 18px; }
+      .topbar { margin-bottom: 18px; }
+      .view-switcher { margin-bottom: 12px; }
+      .brand-copy span { display: none; }
+      .primary { padding: 0 14px; }
+      .day-shell { grid-template-columns: 1fr; border-radius: 21px; }
+      .day-header { padding: 24px; }
+      .day-title { font-size: 2.55rem; }
+      .day-title span { display: inline; margin: 0 0 0 8px; font-size: .46em; }
+      .day-summary { margin-top: 24px; padding-top: 15px; }
+      .agenda { padding: 22px 18px 26px; }
+      .agenda-nav { margin-bottom: 20px; }
+      .count { display: none; }
+      .appointment { grid-template-columns: 56px 13px minmax(0, 1fr); gap: 11px; min-height: 92px; }
+      .time { font-size: .9rem; }
+      .empty { min-height: 280px; }
+      .week-shell { border-radius: 21px; }
+      .week-head { align-items: flex-start; padding: 22px 18px 18px; }
+      .week-grid { display: block; }
+      .week-day { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; padding: 16px 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .week-day:last-child { border-bottom: 0; }
+      .week-day.is-today { box-shadow: inset 4px 0 0 var(--brand-2); }
+      .week-day-button { align-self: start; padding: 2px 10px 8px 0; border: 0; }
+      .week-date { font-size: 1.2rem; }
+      .week-items { margin-top: 0; }
+      .week-empty { margin-top: 4px; }
+      .month-shell { border-radius: 21px; }
+      .month-head { align-items: flex-start; padding: 22px 18px 18px; }
+      .month-day { min-height: 72px; padding: 7px 5px; text-align: center; }
+      .month-number { width: 26px; height: 26px; margin: 0 auto 5px; font-size: .82rem; }
+      .month-appointments { display: none; }
+      .month-mobile-count { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 18px; color: var(--brand-2); font-size: .7rem; font-weight: 850; }
+      .month-mobile-count::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-2); }
+    }
+    @media (max-width: 430px) {
+      .brand-copy strong { font-size: .95rem; }
+      .brand-mark { width: 38px; height: 38px; }
+      .primary { min-height: 42px; font-size: .9rem; }
+      .view-switcher { display: flex; }
+      .view-button { flex: 1; min-width: 0; }
+      .day-header { padding: 22px 20px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .modal-head { padding: 21px 20px 16px; }
+      form { padding: 19px 20px 22px; }
+      .week-head { display: grid; gap: 16px; }
+      .week-nav { justify-content: space-between; }
+      .week-day { grid-template-columns: 78px minmax(0, 1fr); gap: 8px; padding: 14px 15px; }
+      .month-head { display: grid; gap: 16px; }
+      .month-nav { justify-content: space-between; }
+      .month-weekdays span { padding: 8px 2px; font-size: .62rem; letter-spacing: .03em; }
+      .month-day { min-height: 62px; padding: 6px 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand" aria-label="Mi agenda">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+        </div>
+        <div class="brand-copy"><strong>Mi agenda</strong><span>Organiza tu día con claridad</span></div>
+      </div>
+      <button class="primary" id="openForm">+ Nueva cita</button>
+    </header>
+
+    <div class="view-switcher" role="tablist" aria-label="Vista de agenda">
+      <button class="view-button" id="dayViewButton" role="tab" aria-selected="true" aria-controls="dayView">Día</button>
+      <button class="view-button" id="weekViewButton" role="tab" aria-selected="false" aria-controls="weekView">Semana</button>
+      <button class="view-button" id="monthViewButton" role="tab" aria-selected="false" aria-controls="monthView">Mes</button>
+    </div>
+
+    <section class="day-shell" id="dayView" role="tabpanel" aria-labelledby="dayViewButton" aria-live="polite">
+      <header class="day-header">
+        <p class="eyebrow" id="dayContext">Hoy</p>
+        <h1 class="day-title" id="dayTitle"></h1>
+        <p class="day-summary" id="daySummary"></p>
+      </header>
+
+      <div class="agenda">
+        <nav class="agenda-nav" aria-label="Navegar entre días">
+          <div class="nav-group">
+            <button class="icon-button" id="previousDay" aria-label="Día anterior" title="Día anterior">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <button class="today-button" id="today">Hoy</button>
+            <button class="icon-button" id="nextDay" aria-label="Día siguiente" title="Día siguiente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+          <span class="count" id="count"></span>
+        </nav>
+        <div id="appointmentList"></div>
+      </div>
+    </section>
+
+    <section class="week-shell" id="weekView" role="tabpanel" aria-labelledby="weekViewButton" aria-live="polite" hidden>
+      <header class="week-head">
+        <div>
+          <p class="eyebrow" style="color:var(--brand-2);margin-bottom:7px">Vista semanal</p>
+          <h1 class="week-heading" id="weekHeading"></h1>
+          <p class="week-subtitle" id="weekSummary"></p>
+        </div>
+        <nav class="week-nav" aria-label="Navegar entre semanas">
+          <button class="icon-button" id="previousWeek" aria-label="Semana anterior" title="Semana anterior">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <button class="today-button" id="currentWeek">Hoy</button>
+          <button class="icon-button" id="nextWeek" aria-label="Semana siguiente" title="Semana siguiente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </nav>
+      </header>
+      <div class="week-grid" id="weekGrid"></div>
+    </section>
+
+    <section class="month-shell" id="monthView" role="tabpanel" aria-labelledby="monthViewButton" aria-live="polite" hidden>
+      <header class="month-head">
+        <div>
+          <p class="eyebrow" style="color:var(--brand-2);margin-bottom:7px">Vista mensual</p>
+          <h1 class="month-heading" id="monthHeading"></h1>
+          <p class="month-subtitle" id="monthSummary"></p>
+        </div>
+        <nav class="month-nav" aria-label="Navegar entre meses">
+          <button class="icon-button" id="previousMonth" aria-label="Mes anterior" title="Mes anterior">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <button class="today-button" id="currentMonth">Hoy</button>
+          <button class="icon-button" id="nextMonth" aria-label="Mes siguiente" title="Mes siguiente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </nav>
+      </header>
+      <div class="month-weekdays" aria-hidden="true">
+        <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+      </div>
+      <div class="month-grid" id="monthGrid"></div>
+    </section>
+  </main>
+
+  <dialog id="appointmentDialog" aria-labelledby="dialogTitle">
+    <div class="modal-head">
+      <div><h2 id="dialogTitle">Nueva cita</h2><p>Completa los datos básicos de la cita.</p></div>
+      <button class="close-button" id="closeForm" type="button" aria-label="Cerrar formulario">×</button>
+    </div>
+    <form id="appointmentForm">
+      <div class="form-grid">
+        <div class="field"><label for="date">Fecha</label><input id="date" name="date" type="date" required /></div>
+        <div class="field"><label for="time">Hora</label><input id="time" name="time" type="time" required /></div>
+        <div class="field full"><label for="person">Nombre / persona</label><input id="person" name="person" type="text" maxlength="60" placeholder="Ej. Ana Martínez" required /></div>
+        <div class="field full"><label for="note">Motivo o nota <span style="font-weight:400;color:var(--muted)">(opcional)</span></label><textarea id="note" name="note" maxlength="140" placeholder="Ej. Revisión y seguimiento"></textarea></div>
+      </div>
+      <p class="error" id="formError" role="alert"></p>
+      <div class="form-actions"><button class="secondary" id="cancelForm" type="button">Cancelar</button><button class="primary" type="submit">Guardar cita</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status">Cita guardada</div>
+
+  <script>
+    const toKey = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    const fromKey = (value) => {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    };
+    const moveDate = (date, days) => {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result;
+    };
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    let selectedDate = new Date(todayDate);
+    let activeView = 'day';
+    const appointments = [
+      { date: toKey(todayDate), time: '09:30', person: 'Laura Gómez', note: 'Primera consulta' },
+      { date: toKey(todayDate), time: '11:00', person: 'Carlos Ruiz', note: 'Revisión y seguimiento' },
+      { date: toKey(todayDate), time: '16:15', person: 'Marta Sánchez', note: 'Consulta breve' },
+      { date: toKey(moveDate(todayDate, 1)), time: '10:00', person: 'David Moreno', note: 'Primera visita' },
+      { date: toKey(moveDate(todayDate, -1)), time: '12:30', person: 'Elena Castro', note: 'Seguimiento' }
+    ];
+
+    const dayContext = document.querySelector('#dayContext');
+    const dayTitle = document.querySelector('#dayTitle');
+    const daySummary = document.querySelector('#daySummary');
+    const list = document.querySelector('#appointmentList');
+    const count = document.querySelector('#count');
+    const todayButton = document.querySelector('#today');
+    const dialog = document.querySelector('#appointmentDialog');
+    const form = document.querySelector('#appointmentForm');
+    const dateInput = document.querySelector('#date');
+    const timeInput = document.querySelector('#time');
+    const personInput = document.querySelector('#person');
+    const noteInput = document.querySelector('#note');
+    const error = document.querySelector('#formError');
+    const toast = document.querySelector('#toast');
+    const dayView = document.querySelector('#dayView');
+    const weekView = document.querySelector('#weekView');
+    const dayViewButton = document.querySelector('#dayViewButton');
+    const weekViewButton = document.querySelector('#weekViewButton');
+    const weekHeading = document.querySelector('#weekHeading');
+    const weekSummary = document.querySelector('#weekSummary');
+    const weekGrid = document.querySelector('#weekGrid');
+    const currentWeekButton = document.querySelector('#currentWeek');
+    const monthView = document.querySelector('#monthView');
+    const monthViewButton = document.querySelector('#monthViewButton');
+    const monthHeading = document.querySelector('#monthHeading');
+    const monthSummary = document.querySelector('#monthSummary');
+    const monthGrid = document.querySelector('#monthGrid');
+    const currentMonthButton = document.querySelector('#currentMonth');
+
+    const escapeHtml = (value) => value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
+    const isToday = (date) => toKey(date) === toKey(todayDate);
+    const titleFormat = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long' });
+    const weekdayFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'long' });
+    const shortWeekdayFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'short' });
+    const shortDateFormat = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' });
+    const weekRangeFormat = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    const monthTitleFormat = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' });
+    const fullDateFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const startOfWeek = (date) => moveDate(date, -((date.getDay() + 6) % 7));
+    const isSameWeek = (first, second) => toKey(startOfWeek(first)) === toKey(startOfWeek(second));
+    const isSameMonth = (first, second) => first.getFullYear() === second.getFullYear() && first.getMonth() === second.getMonth();
+
+    function renderDay() {
+      const key = toKey(selectedDate);
+      const daily = appointments.filter(item => item.date === key).sort((a, b) => a.time.localeCompare(b.time));
+      const title = titleFormat.format(selectedDate);
+      const [dayNumber, ...monthParts] = title.split(' de ');
+      dayContext.textContent = isToday(selectedDate) ? 'Hoy' : weekdayFormat.format(selectedDate);
+      dayTitle.innerHTML = `${dayNumber}<span>${monthParts.join(' de ')}</span>`;
+      daySummary.innerHTML = daily.length
+        ? `<strong>${daily.length} ${daily.length === 1 ? 'cita' : 'citas'}</strong> programadas para este día.`
+        : '<strong>Día libre.</strong> No tienes citas programadas.';
+      count.textContent = `${daily.length} ${daily.length === 1 ? 'cita' : 'citas'}`;
+      todayButton.disabled = isToday(selectedDate);
+
+      if (!daily.length) {
+        list.innerHTML = `<div class="empty"><div><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M9 15h6"/></svg></div><h2>No hay citas para este día</h2><p>Puedes añadir una nueva cita cuando quieras.</p></div></div>`;
+        return;
+      }
+      list.innerHTML = `<ol class="appointments">${daily.map(item => `<li class="appointment"><time class="time" datetime="${item.date}T${item.time}">${item.time}</time><div class="rail"><span class="dot"></span></div><article class="appointment-card"><h2>${escapeHtml(item.person)}</h2><p>${escapeHtml(item.note || 'Sin nota')}</p></article></li>`).join('')}</ol>`;
+    }
+
+    function renderWeek() {
+      const firstDay = startOfWeek(selectedDate);
+      const lastDay = moveDate(firstDay, 6);
+      const weekAppointments = appointments.filter(item => item.date >= toKey(firstDay) && item.date <= toKey(lastDay));
+      weekHeading.textContent = `${weekRangeFormat.format(firstDay)} – ${weekRangeFormat.format(lastDay)}`;
+      weekSummary.textContent = `${weekAppointments.length} ${weekAppointments.length === 1 ? 'cita programada' : 'citas programadas'}`;
+      currentWeekButton.disabled = isSameWeek(selectedDate, todayDate);
+      weekGrid.innerHTML = Array.from({ length: 7 }, (_, index) => {
+        const date = moveDate(firstDay, index);
+        const key = toKey(date);
+        const daily = appointments.filter(item => item.date === key).sort((a, b) => a.time.localeCompare(b.time));
+        const todayClass = isToday(date) ? ' is-today' : '';
+        const todayLabel = isToday(date) ? ', hoy' : '';
+        return `<article class="week-day${todayClass}">
+          <button class="week-day-button" data-date="${key}" aria-label="Abrir ${weekdayFormat.format(date)} ${shortDateFormat.format(date)}${todayLabel} en vista Día">
+            <span class="week-weekday">${shortWeekdayFormat.format(date)}</span>
+            <span class="week-date">${shortDateFormat.format(date)}</span>
+          </button>
+          <div class="week-items">${daily.length ? daily.map(item => `<article class="week-appointment"><time datetime="${item.date}T${item.time}">${item.time}</time><strong title="${escapeHtml(item.person)}">${escapeHtml(item.person)}</strong><p>${escapeHtml(item.note || 'Sin nota')}</p></article>`).join('') : '<p class="week-empty">Sin citas</p>'}</div>
+        </article>`;
+      }).join('');
+    }
+
+    function renderMonth() {
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      const firstOfMonth = new Date(year, month, 1);
+      const firstCell = startOfWeek(firstOfMonth);
+      const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+      const monthly = appointments.filter(item => item.date.startsWith(monthPrefix));
+      const monthTitle = monthTitleFormat.format(firstOfMonth);
+      monthHeading.textContent = monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1);
+      monthSummary.textContent = `${monthly.length} ${monthly.length === 1 ? 'cita programada' : 'citas programadas'}`;
+      currentMonthButton.disabled = isSameMonth(selectedDate, todayDate);
+      monthGrid.innerHTML = Array.from({ length: 42 }, (_, index) => {
+        const date = moveDate(firstCell, index);
+        const key = toKey(date);
+        const daily = appointments.filter(item => item.date === key).sort((a, b) => a.time.localeCompare(b.time));
+        const classes = ['month-day'];
+        if (!isSameMonth(date, firstOfMonth)) classes.push('is-outside');
+        if (isToday(date)) classes.push('is-today');
+        const visible = daily.slice(0, 3);
+        const extra = daily.length - visible.length;
+        const appointmentLabel = daily.length ? `, ${daily.length} ${daily.length === 1 ? 'cita' : 'citas'}` : ', sin citas';
+        return `<button class="${classes.join(' ')}" data-month-date="${key}" aria-label="Abrir ${fullDateFormat.format(date)}${isToday(date) ? ', hoy' : ''}${appointmentLabel} en vista Día">
+          <span class="month-number">${date.getDate()}</span>
+          <span class="month-appointments">${visible.map(item => `<span class="month-appointment"><time>${item.time}</time>${escapeHtml(item.person)}</span>`).join('')}${extra > 0 ? `<span class="month-more">+${extra} más</span>` : ''}</span>
+          ${daily.length ? `<span class="month-mobile-count" aria-hidden="true">${daily.length}</span>` : ''}
+        </button>`;
+      }).join('');
+    }
+
+    function render() {
+      dayView.hidden = activeView !== 'day';
+      weekView.hidden = activeView !== 'week';
+      monthView.hidden = activeView !== 'month';
+      dayViewButton.setAttribute('aria-selected', activeView === 'day');
+      weekViewButton.setAttribute('aria-selected', activeView === 'week');
+      monthViewButton.setAttribute('aria-selected', activeView === 'month');
+      if (activeView === 'day') renderDay();
+      else if (activeView === 'week') renderWeek();
+      else renderMonth();
+    }
+
+    function setView(view) {
+      activeView = view;
+      render();
+    }
+
+    function openForm() {
+      form.reset();
+      dateInput.value = toKey(selectedDate);
+      timeInput.value = '09:00';
+      error.textContent = '';
+      dialog.showModal();
+      setTimeout(() => personInput.focus(), 0);
+    }
+    function closeForm() { dialog.close(); error.textContent = ''; }
+    document.querySelector('#previousDay').addEventListener('click', () => { selectedDate = moveDate(selectedDate, -1); render(); });
+    document.querySelector('#nextDay').addEventListener('click', () => { selectedDate = moveDate(selectedDate, 1); render(); });
+    todayButton.addEventListener('click', () => { selectedDate = new Date(todayDate); render(); });
+    dayViewButton.addEventListener('click', () => setView('day'));
+    weekViewButton.addEventListener('click', () => setView('week'));
+    monthViewButton.addEventListener('click', () => setView('month'));
+    document.querySelector('#previousWeek').addEventListener('click', () => { selectedDate = moveDate(selectedDate, -7); render(); });
+    document.querySelector('#nextWeek').addEventListener('click', () => { selectedDate = moveDate(selectedDate, 7); render(); });
+    currentWeekButton.addEventListener('click', () => { selectedDate = new Date(todayDate); render(); });
+    weekGrid.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-date]');
+      if (!button) return;
+      selectedDate = fromKey(button.dataset.date);
+      setView('day');
+    });
+    document.querySelector('#previousMonth').addEventListener('click', () => { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1); render(); });
+    document.querySelector('#nextMonth').addEventListener('click', () => { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1); render(); });
+    currentMonthButton.addEventListener('click', () => { selectedDate = new Date(todayDate); render(); });
+    monthGrid.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-month-date]');
+      if (!button) return;
+      selectedDate = fromKey(button.dataset.monthDate);
+      setView('day');
+    });
+    document.querySelector('#openForm').addEventListener('click', openForm);
+    document.querySelector('#closeForm').addEventListener('click', closeForm);
+    document.querySelector('#cancelForm').addEventListener('click', closeForm);
+    dialog.addEventListener('click', (event) => { if (event.target === dialog) closeForm(); });
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const date = dateInput.value;
+      const time = timeInput.value;
+      const person = personInput.value.trim();
+      const note = noteInput.value.trim();
+      if (appointments.some(item => item.date === date && item.time === time)) {
+        error.textContent = 'Ya hay una cita programada para esa fecha y hora.';
+        timeInput.focus();
+        return;
+      }
+      appointments.push({ date, time, person, note });
+      selectedDate = fromKey(date);
+      closeForm();
+      render();
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 2200);
+    });
+
+    render();
+  </script>
+</body>
+</html>
