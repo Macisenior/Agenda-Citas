@@ -174,6 +174,27 @@
     .icon-button:hover, .today-button:hover { border-color: #9bbec5; background: #f6fafb; }
     .today-button:disabled { opacity: .45; cursor: default; }
     .count { color: var(--muted); font-size: .9rem; font-weight: 650; }
+    .day-actions { display: flex; justify-content: flex-end; gap: 10px; min-height: 42px; margin: -14px 0 18px; }
+    .edit-button {
+      min-height: 42px;
+      padding: 0 15px;
+      border: 1px solid #9bbec5;
+      border-radius: 12px;
+      color: var(--brand);
+      background: #fff;
+      font-weight: 750;
+    }
+    .edit-button:hover { border-color: var(--brand-2); background: #f2f9fa; }
+    .delete-button {
+      min-height: 42px;
+      padding: 0 15px;
+      border: 1px solid rgba(173, 63, 67, .35);
+      border-radius: 12px;
+      color: var(--danger);
+      background: #fff;
+      font-weight: 750;
+    }
+    .delete-button:hover { border-color: var(--danger); background: #fff7f7; }
 
     .appointments { list-style: none; margin: 0; padding: 0; }
     .appointment {
@@ -189,14 +210,19 @@
     .appointment:last-child .rail::before { display: none; }
     .dot { position: absolute; top: 20px; left: 2px; width: 12px; height: 12px; border: 3px solid #fff; border-radius: 50%; background: var(--brand-2); box-shadow: 0 0 0 2px var(--brand-2); }
     .appointment-card {
+      width: 100%;
       margin-bottom: 14px;
       padding: 15px 18px;
       border: 1px solid var(--line);
       border-radius: 15px;
+      color: var(--ink);
+      text-align: left;
       background: #fbfdfd;
-      transition: transform .15s ease, border-color .15s ease;
+      box-shadow: none;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
     }
     .appointment-card:hover { transform: translateX(2px); border-color: #a9cbd1; }
+    .appointment-card[aria-pressed="true"] { border-color: var(--brand-2); background: #eff8f9; box-shadow: inset 3px 0 0 var(--brand-2); }
     .appointment-card h2 { margin: 0; font-size: 1.04rem; }
     .appointment-card p { margin: 5px 0 0; color: var(--muted); font-size: .9rem; line-height: 1.4; }
     .empty {
@@ -295,6 +321,11 @@
     .error { min-height: 20px; margin: 14px 0 0; color: var(--danger); font-size: .86rem; font-weight: 650; }
     .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
     .secondary { min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #fff; font-weight: 700; }
+    .danger-button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; color: #fff; background: var(--danger); font-weight: 750; }
+    .danger-button:hover { background: #913337; }
+    .confirmation-copy { margin: 0; padding: 22px 26px 4px; color: var(--muted); line-height: 1.55; }
+    .confirmation-copy strong { color: var(--ink); }
+    .confirmation-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 18px 26px 26px; }
     .toast { position: fixed; right: 22px; bottom: 22px; z-index: 5; padding: 13px 17px; border-radius: 12px; color: #fff; background: var(--brand); box-shadow: var(--shadow); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .22s ease; }
     .toast.visible { opacity: 1; transform: translateY(0); }
 
@@ -311,6 +342,7 @@
       .day-summary { margin-top: 24px; padding-top: 15px; }
       .agenda { padding: 22px 18px 26px; }
       .agenda-nav { margin-bottom: 20px; }
+      .day-actions { margin-top: -8px; }
       .count { display: none; }
       .appointment { grid-template-columns: 56px 13px minmax(0, 1fr); gap: 11px; min-height: 92px; }
       .time { font-size: .9rem; }
@@ -393,6 +425,10 @@
           </div>
           <span class="count" id="count"></span>
         </nav>
+        <div class="day-actions">
+          <button class="edit-button" id="editAppointment" type="button" hidden>Editar cita</button>
+          <button class="delete-button" id="deleteAppointment" type="button" hidden>Eliminar cita</button>
+        </div>
         <div id="appointmentList"></div>
       </div>
     </section>
@@ -443,7 +479,7 @@
 
   <dialog id="appointmentDialog" aria-labelledby="dialogTitle">
     <div class="modal-head">
-      <div><h2 id="dialogTitle">Nueva cita</h2><p>Completa los datos básicos de la cita.</p></div>
+      <div><h2 id="dialogTitle">Nueva cita</h2><p id="dialogDescription">Completa los datos básicos de la cita.</p></div>
       <button class="close-button" id="closeForm" type="button" aria-label="Cerrar formulario">×</button>
     </div>
     <form id="appointmentForm">
@@ -454,8 +490,19 @@
         <div class="field full"><label for="note">Motivo o nota <span style="font-weight:400;color:var(--muted)">(opcional)</span></label><textarea id="note" name="note" maxlength="140" placeholder="Ej. Revisión y seguimiento"></textarea></div>
       </div>
       <p class="error" id="formError" role="alert"></p>
-      <div class="form-actions"><button class="secondary" id="cancelForm" type="button">Cancelar</button><button class="primary" type="submit">Guardar cita</button></div>
+      <div class="form-actions"><button class="secondary" id="cancelForm" type="button">Cancelar</button><button class="primary" id="saveAppointment" type="submit">Guardar cita</button></div>
     </form>
+  </dialog>
+  <dialog id="deleteDialog" aria-labelledby="deleteDialogTitle" aria-describedby="deleteDialogDescription">
+    <div class="modal-head">
+      <div><h2 id="deleteDialogTitle">Eliminar cita</h2><p>Esta acción no se puede deshacer.</p></div>
+      <button class="close-button" id="closeDeleteDialog" type="button" aria-label="Cerrar confirmación">×</button>
+    </div>
+    <p class="confirmation-copy" id="deleteDialogDescription"></p>
+    <div class="confirmation-actions">
+      <button class="secondary" id="cancelDelete" type="button">Cancelar</button>
+      <button class="danger-button" id="confirmDelete" type="button">Sí, eliminar</button>
+    </div>
   </dialog>
   <div class="toast" id="toast" role="status">Cita guardada</div>
 
@@ -479,13 +526,16 @@
     todayDate.setHours(0, 0, 0, 0);
     let selectedDate = new Date(todayDate);
     let activeView = 'day';
+    let selectedAppointmentId = null;
+    let editingAppointmentId = null;
+    let nextAppointmentId = 1;
     const appointments = [
       { date: toKey(todayDate), time: '09:30', person: 'Laura Gómez', note: 'Primera consulta' },
       { date: toKey(todayDate), time: '11:00', person: 'Carlos Ruiz', note: 'Revisión y seguimiento' },
       { date: toKey(todayDate), time: '16:15', person: 'Marta Sánchez', note: 'Consulta breve' },
       { date: toKey(moveDate(todayDate, 1)), time: '10:00', person: 'David Moreno', note: 'Primera visita' },
       { date: toKey(moveDate(todayDate, -1)), time: '12:30', person: 'Elena Castro', note: 'Seguimiento' }
-    ];
+    ].map(item => ({ ...item, id: nextAppointmentId++ }));
 
     const dayContext = document.querySelector('#dayContext');
     const dayTitle = document.querySelector('#dayTitle');
@@ -494,6 +544,8 @@
     const count = document.querySelector('#count');
     const todayButton = document.querySelector('#today');
     const dialog = document.querySelector('#appointmentDialog');
+    const dialogTitle = document.querySelector('#dialogTitle');
+    const dialogDescription = document.querySelector('#dialogDescription');
     const form = document.querySelector('#appointmentForm');
     const dateInput = document.querySelector('#date');
     const timeInput = document.querySelector('#time');
@@ -515,6 +567,12 @@
     const monthSummary = document.querySelector('#monthSummary');
     const monthGrid = document.querySelector('#monthGrid');
     const currentMonthButton = document.querySelector('#currentMonth');
+    const editAppointmentButton = document.querySelector('#editAppointment');
+    const deleteAppointmentButton = document.querySelector('#deleteAppointment');
+    const saveAppointmentButton = document.querySelector('#saveAppointment');
+    const deleteDialog = document.querySelector('#deleteDialog');
+    const deleteDialogDescription = document.querySelector('#deleteDialogDescription');
+    const confirmDeleteButton = document.querySelector('#confirmDelete');
 
     const escapeHtml = (value) => value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
     const isToday = (date) => toKey(date) === toKey(todayDate);
@@ -541,12 +599,15 @@
         : '<strong>Día libre.</strong> No tienes citas programadas.';
       count.textContent = `${daily.length} ${daily.length === 1 ? 'cita' : 'citas'}`;
       todayButton.disabled = isToday(selectedDate);
+      if (!daily.some(item => item.id === selectedAppointmentId)) selectedAppointmentId = null;
+      editAppointmentButton.hidden = selectedAppointmentId === null;
+      deleteAppointmentButton.hidden = selectedAppointmentId === null;
 
       if (!daily.length) {
         list.innerHTML = `<div class="empty"><div><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M9 15h6"/></svg></div><h2>No hay citas para este día</h2><p>Puedes añadir una nueva cita cuando quieras.</p></div></div>`;
         return;
       }
-      list.innerHTML = `<ol class="appointments">${daily.map(item => `<li class="appointment"><time class="time" datetime="${item.date}T${item.time}">${item.time}</time><div class="rail"><span class="dot"></span></div><article class="appointment-card"><h2>${escapeHtml(item.person)}</h2><p>${escapeHtml(item.note || 'Sin nota')}</p></article></li>`).join('')}</ol>`;
+      list.innerHTML = `<ol class="appointments">${daily.map(item => `<li class="appointment"><time class="time" datetime="${item.date}T${item.time}">${item.time}</time><div class="rail"><span class="dot"></span></div><button class="appointment-card" type="button" data-appointment-id="${item.id}" aria-pressed="${item.id === selectedAppointmentId}"><h2>${escapeHtml(item.person)}</h2><p>${escapeHtml(item.note || 'Sin nota')}</p></button></li>`).join('')}</ol>`;
     }
 
     function renderWeek() {
@@ -614,22 +675,48 @@
     }
 
     function setView(view) {
+      selectedAppointmentId = null;
       activeView = view;
       render();
     }
 
     function openForm() {
+      editingAppointmentId = null;
       form.reset();
+      dialogTitle.textContent = 'Nueva cita';
+      dialogDescription.textContent = 'Completa los datos básicos de la cita.';
+      saveAppointmentButton.textContent = 'Guardar cita';
       dateInput.value = toKey(selectedDate);
       timeInput.value = '09:00';
       error.textContent = '';
       dialog.showModal();
       setTimeout(() => personInput.focus(), 0);
     }
-    function closeForm() { dialog.close(); error.textContent = ''; }
-    document.querySelector('#previousDay').addEventListener('click', () => { selectedDate = moveDate(selectedDate, -1); render(); });
-    document.querySelector('#nextDay').addEventListener('click', () => { selectedDate = moveDate(selectedDate, 1); render(); });
-    todayButton.addEventListener('click', () => { selectedDate = new Date(todayDate); render(); });
+    function openEditForm() {
+      const appointment = appointments.find(item => item.id === selectedAppointmentId);
+      if (!appointment) return;
+      editingAppointmentId = appointment.id;
+      form.reset();
+      dialogTitle.textContent = 'Editar cita';
+      dialogDescription.textContent = 'Modifica los datos de la cita seleccionada.';
+      saveAppointmentButton.textContent = 'Guardar cambios';
+      dateInput.value = appointment.date;
+      timeInput.value = appointment.time;
+      personInput.value = appointment.person;
+      noteInput.value = appointment.note;
+      error.textContent = '';
+      dialog.showModal();
+      setTimeout(() => personInput.focus(), 0);
+    }
+    function closeForm() {
+      dialog.close();
+      editingAppointmentId = null;
+      error.textContent = '';
+    }
+    function changeDay(date) { selectedAppointmentId = null; selectedDate = date; render(); }
+    document.querySelector('#previousDay').addEventListener('click', () => changeDay(moveDate(selectedDate, -1)));
+    document.querySelector('#nextDay').addEventListener('click', () => changeDay(moveDate(selectedDate, 1)));
+    todayButton.addEventListener('click', () => changeDay(new Date(todayDate)));
     dayViewButton.addEventListener('click', () => setView('day'));
     weekViewButton.addEventListener('click', () => setView('week'));
     monthViewButton.addEventListener('click', () => setView('month'));
@@ -651,10 +738,42 @@
       selectedDate = fromKey(button.dataset.monthDate);
       setView('day');
     });
+    list.addEventListener('click', (event) => {
+      const card = event.target.closest('[data-appointment-id]');
+      if (!card) return;
+      const id = Number(card.dataset.appointmentId);
+      selectedAppointmentId = selectedAppointmentId === id ? null : id;
+      renderDay();
+    });
+    editAppointmentButton.addEventListener('click', openEditForm);
+    deleteAppointmentButton.addEventListener('click', () => {
+      const appointment = appointments.find(item => item.id === selectedAppointmentId);
+      if (!appointment) return;
+      const formattedDate = fullDateFormat.format(fromKey(appointment.date));
+      deleteDialogDescription.innerHTML = `Vas a eliminar la cita de <strong>${escapeHtml(appointment.person)}</strong> del <strong>${escapeHtml(formattedDate)}</strong> a las <strong>${escapeHtml(appointment.time)}</strong>.`;
+      deleteDialog.showModal();
+      setTimeout(() => confirmDeleteButton.focus(), 0);
+    });
+    function closeDeleteDialog() { deleteDialog.close(); }
+    document.querySelector('#closeDeleteDialog').addEventListener('click', closeDeleteDialog);
+    document.querySelector('#cancelDelete').addEventListener('click', closeDeleteDialog);
+    deleteDialog.addEventListener('click', (event) => { if (event.target === deleteDialog) closeDeleteDialog(); });
+    confirmDeleteButton.addEventListener('click', () => {
+      const index = appointments.findIndex(item => item.id === selectedAppointmentId);
+      if (index === -1) return;
+      appointments.splice(index, 1);
+      selectedAppointmentId = null;
+      closeDeleteDialog();
+      render();
+      toast.textContent = 'Cita eliminada';
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 2200);
+    });
     document.querySelector('#openForm').addEventListener('click', openForm);
     document.querySelector('#closeForm').addEventListener('click', closeForm);
     document.querySelector('#cancelForm').addEventListener('click', closeForm);
     dialog.addEventListener('click', (event) => { if (event.target === dialog) closeForm(); });
+    dialog.addEventListener('close', () => { editingAppointmentId = null; error.textContent = ''; });
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -662,15 +781,21 @@
       const time = timeInput.value;
       const person = personInput.value.trim();
       const note = noteInput.value.trim();
-      if (appointments.some(item => item.date === date && item.time === time)) {
+      if (appointments.some(item => item.id !== editingAppointmentId && item.date === date && item.time === time)) {
         error.textContent = 'Ya hay una cita programada para esa fecha y hora.';
         timeInput.focus();
         return;
       }
-      appointments.push({ date, time, person, note });
+      const editedAppointment = appointments.find(item => item.id === editingAppointmentId);
+      if (editedAppointment) {
+        Object.assign(editedAppointment, { date, time, person, note });
+      } else {
+        appointments.push({ id: nextAppointmentId++, date, time, person, note });
+      }
       selectedDate = fromKey(date);
       closeForm();
       render();
+      toast.textContent = editedAppointment ? 'Cita actualizada' : 'Cita guardada';
       toast.classList.add('visible');
       setTimeout(() => toast.classList.remove('visible'), 2200);
     });
