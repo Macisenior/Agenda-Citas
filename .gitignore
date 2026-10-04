@@ -1,5 +1,4 @@
 .openai/
-dist/
 preview.mjs
 .env
 .env.*
@@ -8,4 +7,3 @@ preview.mjs
 Thumbs.db
 Desktop.ini
 *.log
-
